@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>한글 타자 연습</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@2.40.3/dist/galmuri.css">
+  <style>
+  /* 90년대 도스(DOS) 타자 연습 프로그램 느낌의 색상표 */
+  :root {
+    --bg: #0b0b0b;          /* 모니터 바깥 */
+    --screen: #0a1a8a;      /* 도스 파란 화면 */
+    --screen-dark: #071266;
+    --fg: #c9cbd6;          /* 기본 글자 (밝은 회색) */
+    --dim: #7c84c4;         /* 흐린 글자 */
+    --title: #55ffff;       /* 하늘색 (제목) */
+    --accent: #ffff55;      /* 노란색 (강조) */
+    --ok: #55ff55;          /* 맞은 글자 */
+    --ng: #ff5555;          /* 틀린 글자 */
+    --bar: #a8a8a8;         /* 상단/하단 회색 줄 */
+    --bar-fg: #000000;
+    --font: 'Galmuri11', 'DungGeunMo', monospace;
+    --font-mono: 'GalmuriMono11', 'Galmuri11', monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font);
+    font-size: 16px;
+    -webkit-font-smoothing: none;
+  }
+
+  /* 브라운관(CRT) 모니터 화면 */
+  .crt {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--screen);
+    text-shadow: 0 0 2px rgba(200, 210, 255, .45);
+    overflow: hidden;
+  }
+  /* 가로 주사선 */
+  .crt::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, .18) 0 1px, transparent 1px 3px);
+    z-index: 50;
+  }
+  /* 화면 가장자리가 어두워지는 효과 */
+  .crt::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, .55) 100%);
+    z-index: 51;
+  }
+
+  /* 상단/하단 회색 줄 */
+  .topbar, .keybar {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 6px 16px;
+    background: var(--bar);
+    color: var(--bar-fg);
+    text-shadow: none;
+  }
+  .topbar { justify-content: space-between; }
+  .topbar-title { font-weight: bold; }
+  .keybar { flex-wrap: wrap; font-size: 14px; }
+  .keybar b {
+    display: inline-block;
+    padding: 0 6px;
+    margin-right: 4px;
+    background: var(--screen-dark);
+    color: var(--accent);
+    font-weight: normal;
+  }
+
+  .desk {
+    flex: 1;
+    padding: 28px 16px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+
+  .screen { width: 100%; max-width: 980px; }
+  .hidden { display: none !important; }
+
+  /* 도스식 이중 테두리 창 */
+  .win {
+    position: relative;
+    border: 4px double var(--fg);
+    padding: 26px 20px 18px;
+    background: var(--screen);
+    box-shadow: 10px 10px 0 rgba(0, 0, 0, .55);
+  }
+  .win-title {
+    position: absolute;
+    top: -0.75em;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0 10px;
+    background: var(--screen);
+    color: var(--title);
+    white-space: nowrap;
+  }
+
+  .hint { margin: 0 0 14px; color: var(--dim); font-size: 14px; }
+  .dim { color: var(--dim); }
+  .small { font-size: 13px; margin: 10px 0 0; }
+
+  /* ---------- 작품 고르기 화면 ---------- */
+  #screen-menu {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: 28px;
+  }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .tab {
+    padding: 4px 14px;
+    font-family: var(--font);
+    font-size: 15px;
+    color: var(--fg);
+    background: transparent;
+    border: 1px solid var(--dim);
+    border-radius: 0;
+    cursor: pointer;
+  }
+  .tab.active {
+    color: #000;
+    background: var(--accent);
+    border-color: var(--accent);
+    text-shadow: none;
+  }
+  .tab:not(.active):hover { border-color: var(--title); color: var(--title); }
+
+  .work-list { list-style: none; margin: 0; padding: 0; }
+  .work-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+  .work-item .work-meta { color: var(--dim); white-space: nowrap; }
+  .work-item.selected {
+    background: var(--title);
+    color: #000;
+    text-shadow: none;
+  }
+  .work-item.selected .work-meta { color: #0a1a8a; }
+  .work-item.selected .work-name::before { content: '▶ '; }
+
+  .rank-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .rank-table th {
+    color: var(--accent);
+    font-weight: normal;
+    text-align: left;
+    padding: 4px 4px 8px;
+    border-bottom: 1px dashed var(--dim);
+  }
+  .rank-table td { padding: 5px 4px; }
+  .rank-table td:nth-child(n+4), .rank-table th:nth-child(n+4) { text-align: right; }
+  .rank-table tr.rank-1 td { color: var(--accent); }
+  .rank-table .rank-work {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ---------- 연습 화면 ---------- */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px 4px;
+    background: var(--screen-dark);
+    border: 1px solid var(--dim);
+  }
+  .stat-label { color: var(--dim); font-size: 13px; }
+  .stat-val { color: var(--accent); font-family: var(--font-mono); font-size: 22px; margin-top: 4px; }
+
+  .progress {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 26px;
+    font-family: var(--font-mono);
+    color: var(--title);
+  }
+  .progress-bar { flex: 1; overflow: hidden; white-space: nowrap; letter-spacing: -1px; }
+  .progress-text { color: var(--dim); white-space: nowrap; }
+
+  .lines { display: flex; flex-direction: column; gap: 12px; }
+  .line {
+    min-height: 1.6em;
+    font-size: 22px;
+    line-height: 1.6;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+  .line-prev, .line-next { color: var(--dim); font-size: 17px; }
+  /* 아래 입력칸과 글자 위치가 딱 맞도록 입력칸의 테두리(2px) + 안쪽 여백(12px) 만큼 띄운다 */
+  .line-target, .typing-input {
+    font-family: var(--font);
+    letter-spacing: 0;
+    word-spacing: 0;
+  }
+  .line { padding: 0 14px; }
+  .line-target { color: var(--fg); }
+  .line-target .ok { color: var(--ok); }
+  .line-target .ng { color: #fff; background: var(--ng); text-shadow: none; }
+  .line-target .cur { color: var(--accent); border-bottom: 2px solid var(--accent); }
+  .line-target .caret { animation: blink 1s steps(1) infinite; border-bottom: 2px solid var(--fg); }
+
+  @keyframes blink { 50% { border-bottom-color: transparent; } }
+
+  .typing-input {
+    width: 100%;
+    padding: 10px 12px;
+    font-family: var(--font);
+    font-size: 22px;
+    color: var(--accent);
+    background: #000;
+    border: 2px solid var(--fg);
+    outline: none;
+    caret-color: var(--accent);
+    border-radius: 0;
+  }
+  .typing-input:focus { border-color: var(--title); }
+
+  /* ---------- 결과 창 ---------- */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(0, 0, 20, .6);
+    z-index: 40;
+  }
+  .win-result { width: 100%; max-width: 440px; }
+  .result-work { margin: 0 0 16px; text-align: center; color: var(--title); }
+  .result-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 16px;
+    margin: 0 0 14px;
+  }
+  .result-grid dt { color: var(--dim); }
+  .result-grid dd { margin: 0; text-align: right; color: var(--accent); font-family: var(--font-mono); font-size: 20px; }
+  .result-grade { text-align: center; margin: 0 0 18px; color: var(--ok); }
+
+  .save-form { display: flex; gap: 8px; align-items: center; }
+  .save-form input {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 8px;
+    font-family: var(--font);
+    font-size: 16px;
+    color: var(--accent);
+    background: #000;
+    border: 2px solid var(--fg);
+    border-radius: 0;
+    outline: none;
+  }
+  .save-msg { min-height: 1.4em; margin: 8px 0; font-size: 14px; color: var(--title); }
+
+  .result-actions { display: flex; gap: 8px; justify-content: center; }
+
+  .btn {
+    padding: 6px 14px;
+    font-family: var(--font);
+    font-size: 15px;
+    color: #000;
+    background: var(--bar);
+    border: none;
+    border-radius: 0;
+    box-shadow: 4px 4px 0 #000;
+    cursor: pointer;
+  }
+  .btn:hover, .btn:focus-visible { background: var(--title); outline: none; }
+  .btn:active { transform: translate(4px, 4px); box-shadow: none; }
+  .btn:disabled { opacity: .5; cursor: default; }
+
+  /* ---------- 휴대폰 화면 ---------- */
+  @media (max-width: 720px) {
+    #screen-menu { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .line, .typing-input { font-size: 18px; }
+    .line-prev, .line-next { font-size: 15px; }
+    .desk { padding: 24px 16px; }
+  }
+</style>
+
+</head>
+<body>
+  <div class="crt">
+    <!-- 상단 메뉴줄 -->
+    <header class="topbar">
+      <span class="topbar-title">한글 타자 연습 v1.0</span>
+      <span class="topbar-clock" id="clock">--:--</span>
+    </header>
+
+    <main class="desk">
+      <!-- 1) 작품 고르기 화면 -->
+      <section id="screen-menu" class="screen">
+        <div class="win win-menu">
+          <div class="win-title">[ 작품 고르기 ]</div>
+          <div class="tabs" id="group-tabs" role="tablist"></div>
+          <p class="hint">◀▶ 종류 바꾸기 · ▲▼ 고르고 ENTER, 또는 마우스로 누르세요.</p>
+          <ul class="work-list" id="work-list"></ul>
+        </div>
+
+        <div class="win win-rank">
+          <div class="win-title">[ 명예의 전당 ]</div>
+          <table class="rank-table">
+            <thead><tr><th>순위</th><th>이름</th><th>작품</th><th>타수</th><th>정확도</th></tr></thead>
+            <tbody id="rank-body"><tr><td colspan="5" class="dim">불러오는 중...</td></tr></tbody>
+          </table>
+          <p class="dim small">점수 = 타수 × 정확도</p>
+        </div>
+      </section>
+
+      <!-- 2) 연습 화면 -->
+      <section id="screen-practice" class="screen hidden">
+        <div class="win win-practice">
+          <div class="win-title" id="practice-title">[ 작품 ]</div>
+
+          <div class="stats">
+            <div class="stat"><span class="stat-label">현재타수</span><span class="stat-val" id="st-cpm">0</span></div>
+            <div class="stat"><span class="stat-label">최고타수</span><span class="stat-val" id="st-best">0</span></div>
+            <div class="stat"><span class="stat-label">정확도</span><span class="stat-val" id="st-acc">100%</span></div>
+            <div class="stat"><span class="stat-label">경과시간</span><span class="stat-val" id="st-time">00:00</span></div>
+          </div>
+
+          <div class="progress">
+            <span class="progress-bar" id="progress-bar"></span>
+            <span class="progress-text" id="progress-text">0 / 0</span>
+          </div>
+
+          <div class="lines">
+            <div class="line line-prev" id="line-prev">&nbsp;</div>
+            <div class="line line-target" id="line-target"></div>
+            <input type="text" class="typing-input" id="typing-input"
+                   autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                   aria-label="여기에 위 문장을 따라 입력하세요">
+            <div class="line line-next" id="line-next">&nbsp;</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3) 결과 창 -->
+      <div id="result" class="overlay hidden">
+        <div class="win win-result">
+          <div class="win-title">[ 연습 결과 ]</div>
+          <p class="result-work" id="result-work"></p>
+          <dl class="result-grid">
+            <dt>평균 타수</dt><dd id="rs-cpm">0</dd>
+            <dt>최고 타수</dt><dd id="rs-best">0</dd>
+            <dt>정확도</dt><dd id="rs-acc">0%</dd>
+            <dt>걸린 시간</dt><dd id="rs-time">00:00</dd>
+          </dl>
+          <p class="result-grade" id="rs-grade"></p>
+          <form id="save-form" class="save-form">
+            <label for="player-name">이름</label>
+            <input type="text" id="player-name" maxlength="10" placeholder="10자 이내" autocomplete="off">
+            <button type="submit" class="btn" id="save-btn">기록 저장</button>
+          </form>
+          <p class="save-msg" id="save-msg"></p>
+          <div class="result-actions">
+            <button type="button" class="btn" id="retry-btn">다시 하기</button>
+            <button type="button" class="btn" id="menu-btn">메뉴로</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 하단 기능키 안내줄 -->
+    <footer class="keybar" id="keybar">
+      <span><b>ESC</b> 메뉴</span>
+      <span><b>ENTER</b> 다음 줄</span>
+      <span><b>SPACE</b> 줄 끝에서 다음 줄</span>
+    </footer>
+  </div>
+
+  <script>
+/**
+ * 타자 연습용 한국 문학 작품 (모두 저작권 보호기간이 끝난 작품)
+ * 원문 출처: 위키문헌(ko.wikisource.org). 옛 맞춤법은 요즘 맞춤법으로 바꾸고 한자는 뺐다.
+ * group 은 메뉴 탭 이름 ('짧은 글' 또는 '긴 글'), lines 의 한 줄이 연습 화면의 한 줄이 된다.
+ */
+var TEXTS = [
+  /* ---------- 짧은 글 ---------- */
+  {
+    id: 'seosi', title: '서시', author: '윤동주', year: 1941, kind: '시', group: '짧은 글',
+    lines: [
+      '죽는 날까지 하늘을 우러러',
+      '한 점 부끄럼이 없기를,',
+      '잎새에 이는 바람에도',
+      '나는 괴로워했다.',
+      '별을 노래하는 마음으로',
+      '모든 죽어 가는 것을 사랑해야지',
+      '그리고 나한테 주어진 길을',
+      '걸어가야겠다.',
+      '오늘 밤에도 별이 바람에 스치운다.'
+    ]
+  },
+  {
+    id: 'jindallae', title: '진달래꽃', author: '김소월', year: 1925, kind: '시', group: '짧은 글',
+    lines: [
+      '나 보기가 역겨워',
+      '가실 때에는',
+      '말없이 고이 보내드리오리다.',
+      '영변에 약산',
+      '진달래꽃',
+      '아름따다 가실 길에 뿌리오리다.',
+      '가시는 걸음 걸음',
+      '놓인 그 꽃을',
+      '사뿐히 즈려밟고 가시옵소서.',
+      '나 보기가 역겨워',
+      '가실 때에는',
+      '죽어도 아니 눈물 흘리오리다.'
+    ]
+  },
+  {
+    id: 'eomma', title: '엄마야 누나야', author: '김소월', year: 1922, kind: '시', group: '짧은 글',
+    lines: [
+      '엄마야 누나야 강변 살자,',
+      '뜰에는 반짝이는 금모래빛,',
+      '뒷문 밖에는 갈잎의 노래',
+      '엄마야 누나야 강변 살자.'
+    ]
+  },
+  {
+    id: 'gwangya', title: '광야', author: '이육사', year: 1945, kind: '시', group: '짧은 글',
+    lines: [
+      '까마득한 날에',
+      '하늘이 처음 열리고',
+      '어데 닭 우는 소리 들렸으랴',
+      '모든 산맥들이',
+      '바다를 연모해 휘달릴 때도',
+      '차마 이곳을 범하던 못하였으리라',
+      '끊임없는 광음을',
+      '부지런한 계절이 피어선 지고',
+      '큰 강물이 비로소 길을 열었다',
+      '지금 눈 내리고',
+      '매화 향기 홀로 아득하니',
+      '내 여기 가난한 노래의 씨를 뿌려라.',
+      '다시 천고의 뒤에',
+      '백마 타고 오는 초인이 있어',
+      '이 광야에서 목놓아 부르게 하리라'
+    ]
+  },
+  {
+    id: 'hyangsu', title: '향수 (첫 연)', author: '정지용', year: 1927, kind: '시', group: '짧은 글',
+    lines: [
+      '넓은 벌 동쪽 끝으로',
+      '옛이야기 지줄대는 실개천이 회돌아 나가고,',
+      '얼룩백이 황소가',
+      '해설피 금빛 게으른 울음을 우는 곳,',
+      '그 곳이 참하 꿈엔들 잊힐 리야.'
+    ]
+  },
+  {
+    id: 'moran', title: '모란이 피기까지는', author: '김영랑', year: 1934, kind: '시', group: '짧은 글',
+    lines: [
+      '모란이 피기까지는',
+      '나는 아직 나의 봄을 기다리고 있을 테요',
+      '모란이 뚝뚝 떨어져 버린 날',
+      '나는 비로소 봄을 여읜 설움에 잠길 테요',
+      '오월 어느 날 그 하루 무덥던 날',
+      '떨어져 누운 꽃잎마저 시들어 버리고는',
+      '천지에 모란은 자취도 없어지고',
+      '뻗쳐 오르던 내 보람 서운케 무너졌느니',
+      '모란이 지고 말면 그뿐 내 한 해는 다 가고 말아',
+      '삼백예순 날 하냥 섭섭해 우옵내다',
+      '모란이 피기까지는',
+      '나는 아직 기다리고 있을 테요 찬란한 슬픔의 봄을'
+    ]
+  },
+
+  /* ---------- 긴 글 ---------- */
+  {
+    id: 'byeol', title: '별 헤는 밤', author: '윤동주', year: 1941, kind: '시', group: '긴 글',
+    lines: [
+      '계절이 지나가는 하늘에는',
+      '가을로 가득 차 있습니다.',
+      '나는 아무 걱정도 없이',
+      '가을 속의 별들을 다 헤일 듯합니다.',
+      '가슴속에 하나 둘 새겨지는 별을',
+      '이제 다 못 헤는 것은',
+      '쉬이 아침이 오는 까닭이요,',
+      '내일 밤이 남은 까닭이요,',
+      '아직 나의 청춘이 다하지 않은 까닭입니다.',
+      '별 하나에 추억과',
+      '별 하나에 사랑과',
+      '별 하나에 쓸쓸함과',
+      '별 하나에 동경과',
+      '별 하나에 시와',
+      '별 하나에 어머니, 어머니,',
+      '어머님, 나는 별 하나에 아름다운 말 한마디씩 불러 봅니다.',
+      '소학교 때 책상을 같이 했던 아이들의 이름과,',
+      '패, 경, 옥, 이런 이국 소녀들의 이름과,',
+      '벌써 아기 어머니 된 계집애들의 이름과,',
+      '가난한 이웃 사람들의 이름과,',
+      '비둘기, 강아지, 토끼, 노새, 노루,',
+      '"프랑시스 잠", "라이너 마리아 릴케" 이런 시인의 이름을 불러 봅니다.',
+      '이네들은 너무나 멀리 있습니다.',
+      '별이 아스라이 멀듯이,',
+      '어머님,',
+      '그리고 당신은 멀리 북간도에 계십니다.',
+      '나는 무엇인지 그리워',
+      '이 많은 별빛이 내린 언덕 위에',
+      '내 이름자를 써 보고,',
+      '흙으로 덮어 버리었습니다.',
+      '딴은 밤을 새워 우는 벌레는',
+      '부끄러운 이름을 슬퍼하는 까닭입니다.',
+      '그러나 겨울이 지나고 나의 별에도 봄이 오면',
+      '무덤 위에 파란 잔디가 피어나듯이',
+      '내 이름자 묻힌 언덕 위에도',
+      '자랑처럼 풀이 무성할 거외다.'
+    ]
+  },
+  {
+    id: 'nim', title: '님의 침묵', author: '한용운', year: 1926, kind: '시', group: '긴 글',
+    lines: [
+      '임은 갔습니다. 아아, 사랑하는 나의 임은 갔습니다.',
+      '푸른 산빛을 깨치고 단풍나무 숲을 향하여 난 작은 길을 걸어서',
+      '차마 떨치고 갔습니다.',
+      '황금의 꽃같이 굳고 빛나던 옛 맹세는',
+      '차디찬 티끌이 되어서 한숨의 미풍에 날아갔습니다.',
+      '날카로운 첫키스의 추억은',
+      '나의 운명의 지침을 돌려 놓고 뒷걸음쳐서 사라졌습니다.',
+      '나는 향기로운 임의 말소리에 귀먹고',
+      '꽃다운 임의 얼굴에 눈멀었습니다.',
+      '사랑도 사람의 일이라',
+      '만날 때에 미리 떠날 것을 염려하고 경계하지 않는 것은 아니지만',
+      '이별은 뜻밖의 일이 되고 놀란 가슴은 새로운 슬픔에 터집니다.',
+      '그러나 이별을 쓸데없는 눈물의 원천을 만들고 마는 것은',
+      '스스로 사랑을 깨치는 것인줄 아는 까닭에',
+      '걷잡을 수 없는 슬픔의 힘을 옮겨서',
+      '새 희망의 정수박이에 들이부었습니다.',
+      '우리는 만날 때에 떠날 것을 염려하는 것과 같이',
+      '떠날 때에 다시 만날 것을 믿습니다.',
+      '아아, 임은 갔지만은 나는 임을 보내지 아니하였습니다.',
+      '제 곡조를 못 이기는 사랑의 노래는 임의 침묵을 휩싸고 돕니다.'
+    ]
+  },
+  {
+    id: 'deul', title: '빼앗긴 들에도 봄은 오는가', author: '이상화', year: 1926, kind: '시', group: '긴 글',
+    lines: [
+      '지금은 남의 땅-빼앗긴 들에도 봄은 오는가?',
+      '나는 온몸에 햇살을 받고',
+      '푸른 하늘 푸른 들이 맞붙은 곳으로',
+      '가르마같은 논길을 따라 꿈속을 가듯 걸어만 간다.',
+      '입술을 다문 하늘아 들아',
+      '내 맘에는 내 혼자 온 것 같지를 않구나',
+      '네가 끌었느냐 누가 부르더냐 답답해라 말을 해다오.',
+      '바람은 내 귀에 속삭이며',
+      '한 자국도 서지 마라 옷자락을 흔들고',
+      '종다리는 울타리 너머 아가씨같이 구름 뒤에서 반갑다 웃네.',
+      '고맙게 잘 자란 보리밭아',
+      '간밤 자정이 넘어 내리는 고운 비로',
+      '너는 삼단같은 머리를 감았구나 내 머리조차 가뿐하다.',
+      '혼자라도 가쁘게나 가자',
+      '마른 논을 안고 도는 착한 도랑이',
+      '젖먹이 달래는 노래를 하고 제 혼자 어깨춤만 추고 가네.',
+      '나비 제비야 깝치지 마라',
+      '민들레 제비꽃에도 인사를 해야지',
+      '아주까리 기름을 바른 이가 김을 매는 그 들이라 다 보고 싶다.',
+      '내 손에 호미를 쥐여 다오',
+      '살찐 젖가슴과 같은 부드러운 이 흙을',
+      '발목이 시리도록 밟아도 보고 좋은 땀조차 흘리고 싶다.',
+      '강가에 나온 아이와 같이',
+      '짬도 모르고 끝도 없이 닫는 내 혼아',
+      '무엇을 찾느냐 어디로 갔느냐 우습다 답을 하려무나.',
+      '나는 온몸에 풋내를 띄고',
+      '푸른 웃음 푸른 설음 어우러진 사이로',
+      '다리를 절며 하루를 걷는다 아마도 봄 신령이 지폈나보다.',
+      '그러나 지금은- 들을 빼앗겨 봄조차 빼앗기겠네'
+    ]
+  },
+  {
+    id: 'memil', title: '메밀꽃 필 무렵 (부분)', author: '이효석', year: 1936, kind: '소설', group: '긴 글',
+    lines: [
+      '이지러는 졌으나 보름을 갓 지난 달은',
+      '부드러운 빛을 흔붓이 흘리고 있다.',
+      '대화까지는 팔십 리의 밤길,',
+      '고개를 둘이나 넘고 개울을 하나 건너고',
+      '벌판과 산길을 걸어야 된다.',
+      '달은 지금 긴 산허리에 걸려 있다.',
+      '밤중을 지난 무렵인지 죽은 듯이 고요한 속에서',
+      '짐승 같은 달의 숨소리가 손에 잡힐 듯이 들리며,',
+      '콩 포기와 옥수수 잎새가 한층 달에 푸르게 젖었다.',
+      '산허리는 온통 메밀 밭이어서 피기 시작한 꽃이',
+      '소금을 뿌린 듯이 흐붓한 달빛에 숨이 막힐 지경이다.',
+      '붉은 대공이 향기같이 애잔하고 나귀들의 걸음도 시원하다.',
+      '길이 좁은 까닭에 세 사람은 나귀를 타고 외줄로 늘어섰다.',
+      '방울소리가 시원스럽게 딸랑딸랑 메밀 밭께로 흘러간다.',
+      '앞장선 허 생원의 이야기 소리는',
+      '꽁무니에 선 동이에게는 확적히는 안 들렸으나,',
+      '그는 그대로 개운한 제멋에 적적하지는 않았다.',
+      '"장 선 꼭 이런 날 밤이었네.',
+      '객주집 토방이란 무더워서 잠이 들어야지.',
+      '밤중은 돼서 혼자 일어나 개울가에 목욕하러 나갔지.',
+      '봉평은 지금이나 그제나 마찬가지지.',
+      '보이는 곳마다 메밀 밭이어서 개울가가 어디 없이 하얀 꽃이야.',
+      '돌 밭에 벗어도 좋을 것을, 달이 너무나 밝은 까닭에',
+      '옷을 벗으러 물방앗간으로 들어가지 않았나.',
+      '이상한 일도 많지.',
+      '거기서 난데없는 성 서방네 처녀와 마주쳤단 말이네.',
+      '봉평서야 제일 가는 일색이었지- 팔자에 있었나부지."'
+    ]
+  },
+  {
+    id: 'unsu', title: '운수 좋은 날 (첫 부분)', author: '현진건', year: 1924, kind: '소설', group: '긴 글',
+    lines: [
+      '새침하게 흐린 품이 눈이 올 듯하더니',
+      '눈은 아니 오고 얼다가 만 비가 추적추적 내리었다.',
+      '이날이야말로 동소문 안에서 인력거꾼 노릇을 하는',
+      '김 첨지에게는 오래간만에도 닥친 운수 좋은 날이었다.',
+      '문안에(거기도 문밖은 아니지만) 들어간답시는',
+      '앞집 마나님을 전찻길까지 모셔다 드린 것을 비롯으로',
+      '행여나 손님이 있을까 하고 정류장에서 어정어정하며',
+      '내리는 사람 하나하나에게 거의 비는 듯한 눈결을 보내고 있다가',
+      '마침내 교원인 듯한 양복장이를 동광학교까지 태워다 주기로 되었다.',
+      '첫번에 삼십 전, 둘째 번에 오십 전 -',
+      '아침 댓바람에 그리 흔치 않은 일이었다.',
+      '그야말로 재수가 옴붙어서 근 열흘 동안 돈 구경도 못한 김 첨지는',
+      '십 전짜리 백통화 서 푼, 또는 다섯 푼이',
+      '찰깍하고 손바닥에 떨어질 제 거의 눈물을 흘릴 만큼 기뻤었다.',
+      '더구나 이날 이때에 이 팔십 전이라는 돈이',
+      '그에게 얼마나 유용한지 몰랐다.',
+      '컬컬한 목에 모주 한 잔도 적실 수 있거니와',
+      '그보다도 앓는 아내에게 설렁탕 한 그릇도 사다줄 수 있음이다.',
+      '그의 아내가 기침으로 쿨럭거리기는 벌써 달포가 넘었다.',
+      '조밥도 굶기를 먹다시피 하는 형편이니',
+      '물론 약 한 첩 써 본 일이 없다.',
+      '구태여 쓰려면 못 쓸 바도 아니로되',
+      '그는 병이란 놈에게 약을 주어 보내면 재미를 붙여서 자꾸 온다는',
+      '자기의 신조에 어디까지 충실하였다.',
+      '따라서 의사에게 보인 적이 없으니 무슨 병인지는 알 수 없으되',
+      '반듯이 누워 가지고, 일어나기는새로 모로도 못 눕는 걸 보면',
+      '중증은 중증인 듯.',
+      '병이 이대도록 심해지기는 열흘 전에 조밥을 먹고 체한 때문이다.'
+    ]
+  },
+  {
+    id: 'nalgae', title: '날개 (마지막 부분)', author: '이상', year: 1936, kind: '소설', group: '긴 글',
+    lines: [
+      '우리들은 서로 오해하고 있느니라.',
+      '설마 아내가 아스피린 대신에 아달린의 정량을 나에게 먹여 왔을까?',
+      '나는 그것을 믿을 수는 없다.',
+      '아내가 대체 그럴 까닭이 없을 것이니,',
+      '그러면 나는 날밤을 새면서 도둑질을 계집질을 하였나?',
+      '정말이지 아니다.',
+      '우리 부부는 숙명적으로 발이 맞지 않는 절름발이인 것이다.',
+      '내나 아내나 제 거동에 로직을 붙일 필요는 없다.',
+      '변해할 필요도 없다.',
+      '사실은 사실대로 오해는 오해대로',
+      '그저 끝없이 발을 절뚝거리면서 세상을 걸어가면 되는 것이다.',
+      '그렇지 않을까?',
+      '그러나 나는 이 발길이 아내에게로 돌아가야 옳은가',
+      '이것만은 분간하기가 좀 어려웠다.',
+      '가야하나? 그럼 어디로 가나?',
+      '이때 뚜우 하고 정오 사이렌이 울었다.',
+      '사람들은 모두 네 활개를 펴고 닭처럼 푸드덕거리는 것 같고',
+      '온갖 유리와 강철과 대리석과 지폐와 잉크가',
+      '부글부글 끓고 수선을 떨고 하는 것 같은 찰나!',
+      '그야말로 현란을 극한 정오다.',
+      '나는 불현듯 겨드랑이가 가렵다.',
+      '아하, 그것은 내 인공의 날개가 돋았던 자국이다.',
+      '오늘은 없는 이 날개.',
+      '머릿속에서는 희망과 야심이 말소된 페이지가',
+      '딕셔너리 넘어가듯 번뜩였다.',
+      '나는 걷던 걸음을 멈추고 그리고 일어나',
+      '한 번 이렇게 외쳐 보고 싶었다.',
+      '날개야 다시 돋아라.',
+      '날자. 날자. 한 번만 더 날자꾸나.',
+      '한 번만 더 날아 보자꾸나.'
+    ]
+  }
+];
+</script>
+
+  <script>window.TYPING_API_URL = "https://script.google.com/macros/s/AKfycbyIsrFPvCdvvaJMQ1ZaqbgqB4XayGu5rukV7wbzk2EiL3o4t3vlYaUt8Ook19b54W3D/exec";</script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+
+  // 서버와 이야기하는 방법은 세 가지
+  // 1) GAS 웹앱 안에서 열림 → google.script.run
+  // 2) GitHub Pages 등 바깥에서 열림 → API_URL(GAS /exec 주소)로 fetch
+  // 3) 로컬 미리보기 → 브라우저 저장소에만 기록
+  var HAS_SERVER = typeof google !== 'undefined' && google.script && google.script.run;
+  var API_URL = window.TYPING_API_URL || '';
+  var LOCAL_KEY = 'typing-retro-records';
+
+  var GROUPS = ['짧은 글', '긴 글'];
+
+  var state = {
+    group: GROUPS[0],  // 메뉴에서 보고 있는 종류
+    menuIndex: 0,
+    work: null,
+    lineIndex: 0,
+    composing: false,
+    startedAt: 0,      // 첫 글자를 친 시각
+    lineStartedAt: 0,  // 현재 줄을 치기 시작한 시각
+    keys: 0,           // 지금까지 끝낸 줄에서 맞게 친 타(자판 누름) 수
+    correctChars: 0,
+    totalChars: 0,
+    bestCpm: 0,
+    finished: false,
+    timer: null
+  };
+
+  /* ---------- 한글 타수 계산 ---------- */
+  // 한 글자를 치려면 자판을 몇 번 눌러야 하는지 (예: '각' = ㄱ+ㅏ+ㄱ = 3타, '왕' = ㅇ+ㅗ+ㅏ+ㅇ = 4타)
+  var DOUBLE_VOWELS = [9, 10, 11, 14, 15, 16, 19];          // ㅘ ㅙ ㅚ ㅝ ㅞ ㅟ ㅢ
+  var DOUBLE_FINALS = [3, 5, 6, 9, 10, 11, 12, 13, 14, 15, 18]; // ㄳ ㄵ ㄶ ㄺ ㄻ ㄼ ㄽ ㄾ ㄿ ㅀ ㅄ
+
+  function keyCount(ch) {
+    var code = ch.charCodeAt(0) - 0xAC00;
+    if (code < 0 || code > 11171) return 1;
+    var jung = Math.floor(code / 28) % 21;
+    var jong = code % 28;
+    var n = 1;
+    n += DOUBLE_VOWELS.indexOf(jung) >= 0 ? 2 : 1;
+    if (jong > 0) n += DOUBLE_FINALS.indexOf(jong) >= 0 ? 2 : 1;
+    return n;
+  }
+
+  // 입력한 줄과 원문을 한 글자씩 비교
+  function compareLine(typed, target) {
+    var correct = 0, keys = 0;
+    for (var i = 0; i < Math.min(typed.length, target.length); i++) {
+      if (typed[i] === target[i]) {
+        correct++;
+        keys += keyCount(target[i]);
+      }
+    }
+    return { correct: correct, keys: keys };
+  }
+
+  function minutesSince(t) { return Math.max((Date.now() - t) / 60000, 1 / 600); }
+
+  function fmtTime(sec) {
+    var m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+    return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  /* ---------- 작품 고르기 화면 ---------- */
+  function currentList() {
+    return TEXTS.filter(function (w) { return w.group === state.group; });
+  }
+
+  function renderMenu() {
+    var tabs = $('group-tabs');
+    tabs.innerHTML = '';
+    GROUPS.forEach(function (g) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tab' + (g === state.group ? ' active' : '');
+      btn.setAttribute('role', 'tab');
+      btn.setAttribute('aria-selected', g === state.group);
+      btn.textContent = g;
+      btn.addEventListener('click', function () { selectGroup(g); });
+      tabs.appendChild(btn);
+    });
+
+    var list = $('work-list');
+    list.innerHTML = '';
+    currentList().forEach(function (w, i) {
+      var li = document.createElement('li');
+      li.className = 'work-item' + (i === state.menuIndex ? ' selected' : '');
+      var name = document.createElement('span');
+      name.className = 'work-name';
+      name.textContent = w.title;
+      var meta = document.createElement('span');
+      meta.className = 'work-meta';
+      meta.textContent = w.author + ' · ' + w.kind + ' · ' + w.lines.length + '줄';
+      li.appendChild(name);
+      li.appendChild(meta);
+      li.addEventListener('mouseenter', function () { selectMenu(i); });
+      li.addEventListener('click', function () { startWork(i); });
+      list.appendChild(li);
+    });
+  }
+
+  function selectGroup(g) {
+    if (g === state.group) return;
+    state.group = g;
+    state.menuIndex = 0;
+    renderMenu();
+  }
+
+  function selectMenu(i) {
+    var count = currentList().length;
+    state.menuIndex = (i + count) % count;
+    var items = $('work-list').children;
+    for (var k = 0; k < items.length; k++) {
+      items[k].classList.toggle('selected', k === state.menuIndex);
+    }
+  }
+
+  function showMenu() {
+    stopTimer();
+    $('result').classList.add('hidden');
+    $('screen-practice').classList.add('hidden');
+    $('screen-menu').classList.remove('hidden');
+    loadRanking();
+  }
+
+  /* ---------- 연습 화면 ---------- */
+  function startWork(i) {
+    state.menuIndex = i;
+    state.work = currentList()[i];
+    state.lineIndex = 0;
+    state.startedAt = 0;
+    state.lineStartedAt = 0;
+    state.keys = 0;
+    state.correctChars = 0;
+    state.totalChars = 0;
+    state.bestCpm = 0;
+    state.finished = false;
+
+    $('practice-title').textContent = '[ ' + state.work.title + ' — ' + state.work.author + ' ]';
+    $('result').classList.add('hidden');
+    $('screen-menu').classList.add('hidden');
+    $('screen-practice').classList.remove('hidden');
+
+    $('typing-input').value = '';
+    renderLines();
+    updateStats();
+    stopTimer();
+    state.timer = setInterval(updateStats, 250);
+    $('typing-input').focus();
+  }
+
+  function renderLines() {
+    var lines = state.work.lines;
+    $('line-prev').textContent = lines[state.lineIndex - 1] || ' ';
+    $('line-next').textContent = lines[state.lineIndex + 1] || ' ';
+    $('typing-input').maxLength = lines[state.lineIndex].length + 5;
+    renderTarget();
+
+    var done = state.lineIndex, total = lines.length;
+    var width = 30, filled = Math.round(width * done / total);
+    $('progress-bar').textContent = repeat('█', filled) + repeat('░', width - filled);
+    $('progress-text').textContent = done + ' / ' + total + ' 줄';
+  }
+
+  function repeat(ch, n) { return new Array(n + 1).join(ch); }
+
+  // 원문 줄에 맞은 글자는 초록, 틀린 글자는 빨강, 지금 조합 중인 글자는 노랑으로 표시
+  function renderTarget() {
+    var target = state.work.lines[state.lineIndex];
+    var typed = $('typing-input').value;
+    var box = $('line-target');
+    box.innerHTML = '';
+    for (var i = 0; i < target.length; i++) {
+      var span = document.createElement('span');
+      span.textContent = target[i];
+      if (i < typed.length) {
+        if (state.composing && i === typed.length - 1) span.className = 'cur';
+        else span.className = typed[i] === target[i] ? 'ok' : 'ng';
+      } else if (i === typed.length) {
+        span.className = 'caret';
+      }
+      box.appendChild(span);
+    }
+  }
+
+  function updateStats() {
+    if (!state.work) return;
+    var typed = $('typing-input').value;
+    var target = state.work.lines[state.lineIndex] || '';
+    var cur = compareLine(typed, target);
+    var countable = state.composing ? Math.max(typed.length - 1, 0) : typed.length;
+    var curCorrect = compareLine(typed.slice(0, countable), target).correct;
+
+    var cpm = state.startedAt ? Math.round((state.keys + cur.keys) / minutesSince(state.startedAt)) : 0;
+    var total = state.totalChars + countable;
+    var acc = total ? Math.floor((state.correctChars + curCorrect) / total * 100) : 100;
+    var sec = state.startedAt ? (Date.now() - state.startedAt) / 1000 : 0;
+
+    $('st-cpm').textContent = cpm;
+    $('st-best').textContent = state.bestCpm;
+    $('st-acc').textContent = acc + '%';
+    $('st-time').textContent = fmtTime(sec);
+  }
+
+  function submitLine() {
+    if (state.finished) return;
+    var input = $('typing-input');
+    var typed = input.value.replace(/\s+$/, '');
+    if (!typed) return;
+
+    var target = state.work.lines[state.lineIndex];
+    var r = compareLine(typed, target);
+    state.keys += r.keys;
+    state.correctChars += r.correct;
+    state.totalChars += Math.max(typed.length, target.length);
+
+    var lineCpm = Math.round(r.keys / minutesSince(state.lineStartedAt || Date.now()));
+    if (lineCpm > state.bestCpm) state.bestCpm = lineCpm;
+
+    input.value = '';
+    state.composing = false;
+    state.lineIndex++;
+    state.lineStartedAt = Date.now();
+
+    if (state.lineIndex >= state.work.lines.length) {
+      finish();
+    } else {
+      renderLines();
+      updateStats();
+    }
+  }
+
+  function finish() {
+    state.finished = true;
+    stopTimer();
+    var minutes = minutesSince(state.startedAt);
+    var result = {
+      workId: state.work.id,
+      title: state.work.title,
+      cpm: Math.round(state.keys / minutes),
+      acc: state.totalChars ? Math.floor(state.correctChars / state.totalChars * 100) : 0,
+      seconds: Math.round(minutes * 60)
+    };
+    state.result = result;
+
+    $('progress-bar').textContent = repeat('█', 30);
+    $('progress-text').textContent = state.work.lines.length + ' / ' + state.work.lines.length + ' 줄';
+    $('rs-cpm').textContent = result.cpm;
+    $('rs-best').textContent = state.bestCpm;
+    $('rs-acc').textContent = result.acc + '%';
+    $('rs-time').textContent = fmtTime(result.seconds);
+    $('rs-grade').textContent = gradeText(result.cpm, result.acc);
+    $('result-work').textContent = state.work.title + ' — ' + state.work.author;
+    $('save-msg').textContent = '';
+    $('save-btn').disabled = false;
+    $('result').classList.remove('hidden');
+    $('player-name').focus();
+  }
+
+  function gradeText(cpm, acc) {
+    if (acc < 90) return '★ 정확하게 치는 연습부터 해 봐요!';
+    if (cpm >= 500) return '★★★★★ 타자의 신!';
+    if (cpm >= 350) return '★★★★ 훌륭한 솜씨입니다!';
+    if (cpm >= 200) return '★★★ 꽤 빠르네요!';
+    if (cpm >= 100) return '★★ 좋아요, 조금씩 빨라지고 있어요.';
+    return '★ 천천히, 꾸준히 연습해 봐요.';
+  }
+
+  function stopTimer() {
+    if (state.timer) clearInterval(state.timer);
+    state.timer = null;
+  }
+
+  /* ---------- 입력 처리 ---------- */
+  function bindTyping() {
+    var input = $('typing-input');
+
+    input.addEventListener('compositionstart', function () { state.composing = true; });
+    input.addEventListener('compositionend', function () {
+      state.composing = false;
+      renderTarget();
+    });
+
+    input.addEventListener('input', function () {
+      if (!state.startedAt) state.startedAt = Date.now();
+      if (!state.lineStartedAt) state.lineStartedAt = state.startedAt;
+
+      // 줄 끝까지 친 뒤 띄어쓰기를 누르면 다음 줄로
+      var target = state.work.lines[state.lineIndex];
+      if (input.value.length > target.length && / $/.test(input.value)) {
+        submitLine();
+        return;
+      }
+      renderTarget();
+    });
+
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        // 한글 조합 중에 Enter 를 누르면 마지막 글자가 확정된 뒤에 넘어가도록 잠깐 기다린다
+        setTimeout(submitLine, 10);
+      }
+    });
+
+    // 붙여넣기 금지 (연습이니까요!)
+    input.addEventListener('paste', function (e) { e.preventDefault(); });
+  }
+
+  /* ---------- 전체 키보드 단축키 ---------- */
+  function bindGlobalKeys() {
+    document.addEventListener('keydown', function (e) {
+      var onMenu = !$('screen-menu').classList.contains('hidden');
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        showMenu();
+        return;
+      }
+      if (!onMenu || e.isComposing) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); selectMenu(state.menuIndex + 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); selectMenu(state.menuIndex - 1); }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        var step = e.key === 'ArrowRight' ? 1 : GROUPS.length - 1;
+        selectGroup(GROUPS[(GROUPS.indexOf(state.group) + step) % GROUPS.length]);
+      }
+      else if (e.key === 'Enter') { e.preventDefault(); startWork(state.menuIndex); }
+    });
+
+    // 연습 중 화면 아무 곳이나 눌러도 입력칸으로 돌아가게
+    $('screen-practice').addEventListener('click', function () { $('typing-input').focus(); });
+  }
+
+  /* ---------- 기록 저장 / 명예의 전당 ---------- */
+  function loadRanking() {
+    if (HAS_SERVER) {
+      google.script.run
+        .withSuccessHandler(renderRanking)
+        .withFailureHandler(function () { renderRanking(null); })
+        .api_getRanking();
+    } else if (API_URL) {
+      fetchJson(API_URL + '?action=ranking')
+        .then(renderRanking)
+        .catch(function () { renderRanking(null); });
+    } else {
+      renderRanking(localRanking());
+    }
+  }
+
+  // 로그인 정보(쿠키)를 보내지 않으므로 방문자의 구글 계정 상태와 상관없이 동작한다
+  function fetchJson(url, options) {
+    return fetch(url, Object.assign({ credentials: 'omit' }, options)).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }).then(function (data) {
+      if (data && data.error) throw new Error(data.error);
+      return data;
+    });
+  }
+
+  function localRanking() {
+    var list;
+    try { list = JSON.parse(localStorage.getItem(LOCAL_KEY)) || []; } catch (err) { list = []; }
+    return list.sort(function (a, b) { return b.score - a.score; }).slice(0, 10);
+  }
+
+  function renderRanking(rows) {
+    var body = $('rank-body');
+    body.innerHTML = '';
+    if (!rows || !rows.length) {
+      var tr = document.createElement('tr');
+      var td = document.createElement('td');
+      td.colSpan = 5;
+      td.className = 'dim';
+      td.textContent = rows ? '아직 기록이 없어요. 첫 번째 주인공이 되어 보세요!' : '기록을 불러오지 못했어요.';
+      tr.appendChild(td);
+      body.appendChild(tr);
+      return;
+    }
+    rows.forEach(function (r, i) {
+      var tr = document.createElement('tr');
+      if (i === 0) tr.className = 'rank-1';
+      [i + 1, r.name, r.title, r.cpm, r.acc + '%'].forEach(function (v, k) {
+        var td = document.createElement('td');
+        td.textContent = v;
+        if (k === 2) { td.className = 'rank-work'; td.title = v; }
+        tr.appendChild(td);
+      });
+      body.appendChild(tr);
+    });
+  }
+
+  function bindResult() {
+    $('save-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (!state.result || $('save-btn').disabled) return;
+      var record = Object.assign({ name: $('player-name').value.trim() || '익명' }, state.result);
+      $('save-btn').disabled = true;
+      $('save-msg').textContent = '저장 중...';
+
+      if (HAS_SERVER) {
+        google.script.run
+          .withSuccessHandler(function (rows) {
+            $('save-msg').textContent = '기록이 저장되었습니다!';
+            renderRanking(rows);
+          })
+          .withFailureHandler(function () {
+            $('save-msg').textContent = '저장에 실패했어요. 잠시 후 다시 시도해 주세요.';
+            $('save-btn').disabled = false;
+          })
+          .api_saveRecord(record);
+      } else if (API_URL) {
+        // text/plain 으로 보내야 브라우저의 사전 확인(CORS preflight) 없이 GAS 로 바로 전달된다
+        fetchJson(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'save', record: record })
+        }).then(function (rows) {
+          $('save-msg').textContent = '기록이 저장되었습니다!';
+          renderRanking(rows);
+        }).catch(function () {
+          $('save-msg').textContent = '저장에 실패했어요. 잠시 후 다시 시도해 주세요.';
+          $('save-btn').disabled = false;
+        });
+      } else {
+        record.score = Math.round(record.cpm * record.acc / 100);
+        try {
+          var list = JSON.parse(localStorage.getItem(LOCAL_KEY)) || [];
+          list.push(record);
+          localStorage.setItem(LOCAL_KEY, JSON.stringify(list));
+          $('save-msg').textContent = '기록이 저장되었습니다! (미리보기: 이 브라우저에만 저장)';
+        } catch (err) {
+          $('save-msg').textContent = '이 브라우저에서는 기록을 저장할 수 없어요.';
+        }
+      }
+    });
+
+    $('retry-btn').addEventListener('click', function () { startWork(state.menuIndex); });
+    $('menu-btn').addEventListener('click', showMenu);
+  }
+
+  /* ---------- 상단 시계 ---------- */
+  function tickClock() {
+    var d = new Date();
+    var h = d.getHours(), m = d.getMinutes();
+    $('clock').textContent = (h < 12 ? '오전 ' : '오후 ') + ((h % 12) || 12) + ':' + (m < 10 ? '0' : '') + m;
+  }
+
+  /* ---------- 시작 ---------- */
+  renderMenu();
+  bindTyping();
+  bindGlobalKeys();
+  bindResult();
+  tickClock();
+  setInterval(tickClock, 10000);
+  loadRanking();
+})();
+</script>
+
+</body>
+</html>
