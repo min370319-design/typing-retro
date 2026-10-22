@@ -211,17 +211,20 @@
   .progress-bar { flex: 1; overflow: hidden; white-space: nowrap; letter-spacing: -1px; }
   .progress-text { color: var(--dim); white-space: nowrap; }
 
-  .lines { display: flex; flex-direction: column; gap: 12px; }
+  /* 한 페이지 = 여러 줄. 각 줄은 [원문] 아래 [입력칸] 한 쌍 */
+  .lines { display: flex; flex-direction: column; gap: 14px; }
+  .row { display: flex; flex-direction: column; gap: 4px; }
   .line {
-    min-height: 1.6em;
-    font-size: 22px;
-    line-height: 1.6;
+    min-height: 1.5em;
+    font-size: 20px;
+    line-height: 1.5;
     word-break: keep-all;
     overflow-wrap: anywhere;
   }
-  .line-prev, .line-next { color: var(--dim); font-size: 17px; }
+  .row.todo .line-target { color: var(--dim); }
+  .row.done .line-target { opacity: .85; }
   /* 아래 입력칸과 글자 위치가 딱 맞도록 입력칸의 테두리(2px) + 안쪽 여백(12px) 만큼 띄운다 */
-  .line-target, .typing-input {
+  .line-target, .typing-box {
     font-family: var(--font);
     letter-spacing: 0;
     word-spacing: 0;
@@ -235,19 +238,29 @@
 
   @keyframes blink { 50% { border-bottom-color: transparent; } }
 
-  .typing-input {
+  /* 입력칸과, 다 친 줄/아직 안 친 줄을 보여 주는 상자는 크기가 똑같아야 한다 */
+  .typing-box {
+    display: block;
     width: 100%;
+    height: calc(1.4em + 24px); /* 글자 높이 + 위아래 여백 10px×2 + 테두리 2px×2 */
     padding: 10px 12px;
-    font-family: var(--font);
-    font-size: 22px;
+    font-size: 20px;
+    line-height: 1.4;
     color: var(--accent);
     background: #000;
-    border: 2px solid var(--fg);
+    border: 2px solid var(--dim);
+    border-radius: 0;
+    white-space: pre;
+    overflow: hidden;
+  }
+  .typing-input {
+    border-color: var(--fg);
     outline: none;
     caret-color: var(--accent);
-    border-radius: 0;
   }
   .typing-input:focus { border-color: var(--title); }
+  .typing-box .ng { color: var(--ng); text-decoration: underline; }
+  .row.todo .typing-box { background: rgba(0, 0, 0, .35); }
 
   /* ---------- 결과 창 ---------- */
   .overlay {
@@ -308,8 +321,7 @@
   @media (max-width: 720px) {
     #screen-menu { grid-template-columns: 1fr; }
     .stats { grid-template-columns: repeat(2, 1fr); }
-    .line, .typing-input { font-size: 18px; }
-    .line-prev, .line-next { font-size: 15px; }
+    .line, .typing-box { font-size: 17px; }
     .desk { padding: 24px 16px; }
   }
 </style>
@@ -360,13 +372,11 @@
             <span class="progress-text" id="progress-text">0 / 0</span>
           </div>
 
-          <div class="lines">
-            <div class="line line-prev" id="line-prev">&nbsp;</div>
-            <div class="line line-target" id="line-target"></div>
-            <input type="text" class="typing-input" id="typing-input"
+          <!-- 한 페이지(여러 줄)를 Script 에서 그려 넣는다. 입력칸은 지금 치는 줄 아래로 옮겨 다닌다 -->
+          <div class="lines" id="lines">
+            <input type="text" class="typing-box typing-input" id="typing-input"
                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                    aria-label="여기에 위 문장을 따라 입력하세요">
-            <div class="line line-next" id="line-next">&nbsp;</div>
           </div>
         </div>
       </section>
@@ -719,6 +729,7 @@ var TEXTS = [
   var LOCAL_KEY = 'typing-retro-records';
 
   var GROUPS = ['짧은 글', '긴 글'];
+  var PAGE_SIZE = 5; // 연습 화면 한 페이지에 보여 줄 줄 수
 
   var state = {
     group: GROUPS[0],  // 메뉴에서 보고 있는 종류
@@ -733,6 +744,7 @@ var TEXTS = [
     totalChars: 0,
     bestCpm: 0,
     finished: false,
+    typed: [],         // 줄마다 실제로 친 내용 (다 친 줄을 다시 보여 줄 때 사용)
     timer: null
   };
 
@@ -845,6 +857,7 @@ var TEXTS = [
     state.totalChars = 0;
     state.bestCpm = 0;
     state.finished = false;
+    state.typed = [];
 
     $('practice-title').textContent = '[ ' + state.work.title + ' — ' + state.work.author + ' ]';
     $('result').classList.add('hidden');
@@ -852,45 +865,90 @@ var TEXTS = [
     $('screen-practice').classList.remove('hidden');
 
     $('typing-input').value = '';
-    renderLines();
+    renderPage();
     updateStats();
     stopTimer();
     state.timer = setInterval(updateStats, 250);
-    $('typing-input').focus();
   }
 
-  function renderLines() {
+  // 한 페이지에 PAGE_SIZE 줄을 [원문] + [입력칸] 쌍으로 보여 준다.
+  // 다 친 줄은 친 내용을, 지금 줄은 진짜 입력칸을, 남은 줄은 빈 상자를 둔다.
+  function renderPage() {
     var lines = state.work.lines;
-    $('line-prev').textContent = lines[state.lineIndex - 1] || ' ';
-    $('line-next').textContent = lines[state.lineIndex + 1] || ' ';
-    $('typing-input').maxLength = lines[state.lineIndex].length + 5;
+    var input = $('typing-input');
+    var box = $('lines');
+    var start = Math.floor(state.lineIndex / PAGE_SIZE) * PAGE_SIZE;
+    var end = Math.min(start + PAGE_SIZE, lines.length);
+
+    box.innerHTML = '';
+    for (var i = start; i < end; i++) {
+      var row = document.createElement('div');
+      var target = document.createElement('div');
+      target.className = 'line line-target';
+      row.appendChild(target);
+
+      if (i < state.lineIndex) {
+        row.className = 'row done';
+        paintTarget(target, lines[i], state.typed[i], false);
+        row.appendChild(typedBox(lines[i], state.typed[i]));
+      } else if (i === state.lineIndex) {
+        row.className = 'row current';
+        target.id = 'line-target';
+        row.appendChild(input);
+      } else {
+        row.className = 'row todo';
+        target.textContent = lines[i];
+        var empty = document.createElement('div');
+        empty.className = 'typing-box';
+        row.appendChild(empty);
+      }
+      box.appendChild(row);
+    }
+
+    input.maxLength = lines[state.lineIndex].length + 5;
     renderTarget();
+    input.focus();
 
     var done = state.lineIndex, total = lines.length;
     var width = 30, filled = Math.round(width * done / total);
     $('progress-bar').textContent = repeat('█', filled) + repeat('░', width - filled);
-    $('progress-text').textContent = done + ' / ' + total + ' 줄';
+    $('progress-text').textContent = done + ' / ' + total + ' 줄 · ' +
+      (start / PAGE_SIZE + 1) + ' / ' + Math.ceil(total / PAGE_SIZE) + ' 쪽';
   }
 
   function repeat(ch, n) { return new Array(n + 1).join(ch); }
 
   // 원문 줄에 맞은 글자는 초록, 틀린 글자는 빨강, 지금 조합 중인 글자는 노랑으로 표시
-  function renderTarget() {
-    var target = state.work.lines[state.lineIndex];
-    var typed = $('typing-input').value;
-    var box = $('line-target');
-    box.innerHTML = '';
+  function paintTarget(el, target, typed, showCaret) {
+    el.innerHTML = '';
     for (var i = 0; i < target.length; i++) {
       var span = document.createElement('span');
       span.textContent = target[i];
       if (i < typed.length) {
-        if (state.composing && i === typed.length - 1) span.className = 'cur';
+        if (showCaret && state.composing && i === typed.length - 1) span.className = 'cur';
         else span.className = typed[i] === target[i] ? 'ok' : 'ng';
-      } else if (i === typed.length) {
+      } else if (showCaret && i === typed.length) {
         span.className = 'caret';
       }
-      box.appendChild(span);
+      el.appendChild(span);
     }
+  }
+
+  function renderTarget() {
+    paintTarget($('line-target'), state.work.lines[state.lineIndex], $('typing-input').value, true);
+  }
+
+  // 다 친 줄: 내가 친 글자를 입력칸과 같은 모양의 상자에 남겨 두고, 틀린 글자만 빨갛게
+  function typedBox(target, typed) {
+    var el = document.createElement('div');
+    el.className = 'typing-box';
+    for (var i = 0; i < typed.length; i++) {
+      var span = document.createElement('span');
+      span.textContent = typed[i];
+      if (typed[i] !== target[i]) span.className = 'ng';
+      el.appendChild(span);
+    }
+    return el;
   }
 
   function updateStats() {
@@ -927,6 +985,7 @@ var TEXTS = [
     var lineCpm = Math.round(r.keys / minutesSince(state.lineStartedAt || Date.now()));
     if (lineCpm > state.bestCpm) state.bestCpm = lineCpm;
 
+    state.typed[state.lineIndex] = typed;
     input.value = '';
     state.composing = false;
     state.lineIndex++;
@@ -935,7 +994,7 @@ var TEXTS = [
     if (state.lineIndex >= state.work.lines.length) {
       finish();
     } else {
-      renderLines();
+      renderPage();
       updateStats();
     }
   }
